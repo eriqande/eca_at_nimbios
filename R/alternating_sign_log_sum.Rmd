@@ -134,12 +134,19 @@ $sampling.time
 Aha! There is the problem.  Just a typo really.  `f3` uses `replicate` where it
 probably wants to use `rep` or even `rep.int`.  Check out the source code for
 `replicate`:
-```{r replicate}
-replicate
+```{r replicate, eval=FALSE}
+function (n, expr, simplify = "array") 
+sapply(integer(n), eval.parent(substitute(function(...) expr)), 
+    simplify = simplify)
+<bytecode: 0x100eeaf20>
+<environment: namespace:base>
 ```
-`replicate` is actually a wrapper for `sapply`.  So, let's see what happens
+`replicate` is actually a wrapper for `sapply`.  
+
+So, let's see what happens
 if we use `rep.int`
-there instead.  Define this new `f3` and call it `f5`
+there instead.  Make a new function like `f3` but use `rep.int` instead, and call
+that `f5`:
 ```{r f5}
 f5 <- function(ind) {
   sign <- rep.int(1L,length(ind))
