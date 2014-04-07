@@ -2,7 +2,9 @@
 
 This is just a repository of some of the things that eric worked on
 while at the
-[NIMBioS Tutorial: Computing in the Cloud](http://www.nimbios.org/tutorials/TT_cloud) workshop in early April 2014.
+[NIMBioS Tutorial: Computing in the Cloud](http://www.nimbios.org/tutorials/TT_cloud) 
+workshop in early April 2014.
+
 
 As work by a US Government employee it is all in the public domain and 
 not subject to copyright in the US.  In addition, internationally
