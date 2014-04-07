@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+R/cache
+R/*.html
+R/*.md
+*~
+*Rprof.out
+

@@ -1,0 +1,172 @@
+Benchmarking Drew's alternating-sign log sum
+=======================================
+
+I was curious about Drew's example showing that doing the sum, 
+\[
+\sum_{i=1}^n (-1)^{i+1} \log(i)
+\]
+in R using a `for` loop took only
+$\approx 1.3$ times longer than doing it in a vectorized fashion.
+That went against most things I had been told or encountered myself
+when programming in R.
+
+Investigating further seemed like a good opportunity to practice with
+Markdown (and maybe get an RPubs account).
+
+
+So, let's recreate it.  Here is the function that uses a `for` loop:
+```{r f1}
+f1 <- function(ind) {
+  sum <- 0
+  for (i in ind){
+    if (i%%2 == 0)
+      sum <- sum - log (i)
+    else
+      sum <- sum + log (i)
+  }
+  sum
+}
+```
+
+Here is version 2, that does an `sapply`:
+```{r f2}
+f2 <- function(ind){
+  sum(sapply(X=ind, FUN = function (i) if (i%% 2==0) -log (i)
+             else log (i)))
+}
+```
+
+And here we have the vectorized version:
+```{r f3}
+f3 <- function(ind) {
+  sign <- replicate(length(ind), 1L)
+  sign [seq.int( from = 2, to = length(ind), by =2) ] <- -1L
+  sum ( sign * log ( ind ))
+}
+```
+
+And while we are at it, let's throw another one into the mix that uses vectorization
+and relies on recycling so we don't have to type as much:
+```{r f4}
+f4 <- function(ind) {
+  sum(c(1,-1) * log(ind))  
+}
+```
+
+So, now we rbenchmark these:
+```{r rb, cache=TRUE}
+library(rbenchmark)
+ind <- 1:50000
+benchmark(f1(ind), f2( ind ), f3(ind), f4(ind), replications=10)
+```
+
+**Holy Crap Batman!** We see here that `f1` didn't do nearly as well 
+as `f3` because `f1` did well, but rather because `f3` did quite poorly.
+This, of course, begs the question, "which part of the perfectly fine-looking
+R code in `f3` is the culprit?"     
+
+But before we try to answer that question
+I am going to take a quick digression into `microbenchmark` which is a 
+package that Hadley Wickham recommends in the advanced R book that he is 
+writing (check it out [here](http://adv-r.had.co.nz) and the section on
+microbenchmarking is [here](http://adv-r.had.co.nz/Performance.html)). If
+you haven't run across this book, do check it out. It is a fabulous resource.  
+
+### A digression into microbenchmark
+Let's try it:
+```{r mbm, cache=TRUE}
+library(microbenchmark)
+microbenchmark(f1(ind), f2(ind), f3(ind), f4(ind), times=10)
+```
+OK, similar results, but perhaps with more accurate timings.  Apparently 
+`microbenchark` is intended for timing only very small pieces of code, but 
+this is what the authors say about it:
+> `microbenchmark` serves as a more accurate replacement of the often seen 
+> `system.time(replicate(1000, expr))` expression. It tries hard to accurately measure
+> only the time it takes to evaluate expr. To achieved this, the sub-millisecond
+> (supposedly nanosecond) accurate timing functions most modern operating systems
+> provide are used. Additionally all evaluations of the expressions are done in C code
+> to minimze any overhead.
+
+
+### Now, let's find the culprit
+Let's try some of the cool profiling methods that Drew told us about.
+
+Here we will run `f3` 25 times while running `Rprof()`
+```{r Rprof, cache=TRUE, eval=FALSE}
+Rprof(interval=.02)
+for(i in 1:20) f3(ind)
+Rprof(NULL)
+summaryRprof()
+```
+Now, we don't actually evaluate that chunk while knitting to HTML because when 
+evaluated within `knitr` it is imbedded within some evaluation functions that
+make the `summaryRprof` ouput rather nasty.  But I will just paste it in here:
+```
+$by.self
+                 self.time self.pct total.time total.pct
+"lapply"              0.82    56.94       1.22     84.72
+"FUN"                 0.40    27.78       0.40     27.78
+"unlist"              0.10     6.94       0.62     43.06
+"f3"                  0.06     4.17       1.44    100.00
+"*"                   0.04     2.78       0.04      2.78
+"unique.default"      0.02     1.39       0.02      1.39
+
+$by.total
+                 total.time total.pct self.time self.pct
+"f3"                   1.44    100.00      0.06     4.17
+"replicate"            1.34     93.06      0.00     0.00
+"sapply"               1.34     93.06      0.00     0.00
+"lapply"               1.22     84.72      0.82    56.94
+"simplify2array"       0.64     44.44      0.00     0.00
+"unlist"               0.62     43.06      0.10     6.94
+"unique"               0.60     41.67      0.00     0.00
+"FUN"                  0.40     27.78      0.40    27.78
+"*"                    0.04      2.78      0.04     2.78
+"unique.default"       0.02      1.39      0.02     1.39
+
+$sample.interval
+[1] 0.02
+
+$sampling.time
+[1] 1.44
+```
+Aha! There is the problem.  Just a typo really.  `f3` uses `replicate` where it
+probably wants to use `rep` or even `rep.int`.  Check out the source code for
+`replicate`:
+```{r replicate}
+replicate
+```
+`replicate` is actually a wrapper for `sapply`.  So, let's see what happens
+if we use `rep.int`
+there instead.  Define this new `f3` and call it `f5`
+```{r f5}
+f5 <- function(ind) {
+  sign <- rep.int(1L,length(ind))
+  sign [seq.int( from = 2, to = length(ind), by =2) ] <- -1L
+  sum ( sign * log ( ind ))
+}
+```
+
+Then `microbenchmark` them all:
+```{r mball, cache=TRUE}
+microbenchmark(f1(ind), f2(ind), f3(ind), f4(ind), f5(ind), times=10)
+```
+That seems a little more like it.  `f5` is now almost as fast as `f4`.
+
+Cool Stuff.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
